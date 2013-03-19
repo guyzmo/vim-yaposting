@@ -177,7 +177,7 @@ function! s:DoMappings() " {{{
     exe 'vnoremap '.g:yaposting#cuthere.'  dO'.g:yaposting#CutHereBeg.'<CR>'.g:yaposting#CutHereEnd.'<ESC>P'
 endfunction " }}}
 
-sil call s:DoMappings()
+au FileType mail sil call s:DoMappings()
 
 
 
