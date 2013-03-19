@@ -12,122 +12,115 @@ endif
 
 """
 
-let s:takeout  = "<Leader>qt"
-let s:reformat = "<Leader>qr"
-let s:oequotef = "<Leader>qm"
-let s:cleanrep = "<Leader>qc"
-let s:cleanreu = "<Leader>q<UP>"
-let s:cleanred = "<Leader>q<DOWN>"
-let s:highligh = "<Leader>qh"
-let s:cuthere  = "<Leader>qn"
+let g:yaposting#takeout  = "<Leader>mt"
+let g:yaposting#reformat = "<Leader>mr"
+let g:yaposting#oequotef = "<Leader>mm"
+let g:yaposting#cleanrep = "<Leader>mc"
+let g:yaposting#cleanreu = "<Leader>m<UP>"
+let g:yaposting#cleanred = "<Leader>m<DOWN>"
+let g:yaposting#highligh = "<Leader>mh"
+let g:yaposting#cuthere  = "<Leader>mn"
 
-let s:marginleft  = 0
-let s:textwidth   = 80
-let s:alinea      = 4
+let g:yaposting#marginleft  = 0
+let g:yaposting#marginright = 8
+let g:yaposting#textwidth   = 80
+let g:yaposting#alinea      = 4
 
-let g:QuoteRegexp = '>'
-" This is the signature footer pattern.
-let s:SignPattern = '-- '
+let g:yaposting#QuoteExpr = '>'
+let g:yaposting#TakeOutExpr = '[…]'
 
-let s:CutHereBeg = '--------8<----------------8<----------------8<---------------8<--------'
-let s:CutHereEnd = '-------->8---------------->8---------------->8--------------->8--------'
+let g:yaposting#CutHereBeg = '--------8<----------------8<----------------8<---------------8<--------'
+let g:yaposting#CutHereEnd = '-------->8---------------->8---------------->8--------------->8--------'
 
 " Here be dragons
 
 python <<EOS
+import vim
 import sys
-#reload(sys)
-#sys.setdefaultencoding('utf8')
-sys.path += "../pylibs"
+import os.path
+curpath = vim.eval("getcwd()")
+libpath = os.path.join(os.path.dirname(os.path.dirname(vim.eval("expand('<sfile>:p')"))), 'pylibs')
+sys.path = [os.path.dirname(libpath), libpath, curpath] + sys.path
+
 import mail_format
-#reload(mail_format)
 
 def _oe_quotefix(beg, end, *arg):
-    encoding = vim.eval("&encoding")$
+    encoding = vim.eval("&encoding")
     m = mail_format.Mail("\n".join(vim.current.buffer[beg-1:end])).oe_quotefix(strip_signature=True, 
                                                                     reformat=True,
                                                                     linewidth=72)
     return m.__str__().encode(encoding).split("\n")
 
+def _take_out(beg, end, *arg):
+    encoding = vim.eval("&encoding")
+    quote = vim.eval("g:yaposting#QuoteExpr")
+    takeoutexpr = vim.eval("g:yaposting#TakeOutExpr")
+    vim.command("let winview = winsaveview()")
+    if beg == end:
+        beg, end, quote = mail_format.Quote(quote=quote).find_current_level_boundaries(vim.current.buffer[:], curline=beg)
+    else:
+        qbeg, qend, quote = mail_format.Quote(quote=quote).find_current_level_boundaries(vim.current.buffer[beg-1:end])
+        beg = qbeg+beg-1
+        end = qbeg+end-1
+    vim.command("norm "+str(beg)+"GV"+str(end)+"Gs"+quote+takeoutexpr)
+    vim.command("call winrestview(winview)")
+
 def _clean_quotes(beg, end, *arg):
-    encoding = vim.eval("&encoding")$
-    q = mail_format.Quote().reformat_quotes("\n".join(vim.current.buffer[beg-1:end]), 72)
+    encoding = vim.eval("&encoding")
+    quote = vim.eval("g:yaposting#QuoteExpr")
+    vim.command("let winview = winsaveview()")
+    if beg == end:
+        beg, end = mail_format.Quote(quote=quote).find_boundaries(vim.current.buffer[:])
+    else:
+        qbeg, qend = mail_format.Quote(quote=quote).find_boundaries(vim.current.buffer[beg-1:end])
+        beg = qbeg+beg-1
+        end = qbeg+end-1
+    q = mail_format.Quote(quote=quote).reformat_quotes("\n".join(vim.current.buffer[beg-1:end]), 72)
     vim.current.buffer[beg-1:end] = q.encode(encoding).split("\n")
+    vim.command("call winrestview(winview)")
 
 def _inc_quote_level(beg, end, *arg):
-    encoding = vim.eval("&encoding")$
-    q = mail_format.Quote().increase_quote_level("\n".join(vim.current.buffer[beg-1:end]), whole=True)
+    encoding = vim.eval("&encoding")
+    quote = vim.eval("g:yaposting#QuoteExpr")
+    vim.command("let winview = winsaveview()")
+    q = mail_format.Quote(quote=quote).increase_quote_level("\n".join(vim.current.buffer[beg-1:end]), whole=True)
     vim.current.buffer[beg-1:end] = q.encode(encoding).split("\n")
+    vim.command("call winrestview(winview)")
 
 def _dec_quote_level(beg, end, *arg):
-    encoding = vim.eval("&encoding")$
-    q = mail_format.Quote().decrease_quote_level("\n".join(vim.current.buffer[beg-1:end]))
+    encoding = vim.eval("&encoding")
+    quote = vim.eval("g:yaposting#QuoteExpr")
+    vim.command("let winview = winsaveview()")
+    q = mail_format.Quote(quote=quote).decrease_quote_level("\n".join(vim.current.buffer[beg-1:end]))
     vim.current.buffer[beg-1:end] = q.encode(encoding).split("\n")
+    vim.command("call winrestview(winview)")
 
 def _justify(beg, end, *arg):
-    encoding = vim.eval("&encoding")$
+    encoding = vim.eval("&encoding")
+    quote = vim.eval("g:yaposting#QuoteExpr")
+    vim.command("let winview = winsaveview()")
     if beg == end:
         vim.command("norm vip")
-        beg = vim.current.buffer.mark('<')[0]
-        end = vim.current.buffer.mark('>')[0]
-    justified = mail_format.Text(vim.current.buffer.range(beg-1, end).decode(encoding)).justify(72, indent_first=4).encode(encoding)
+        try:
+            beg = vim.current.buffer.mark('<')[0]
+            end = vim.current.buffer.mark('>')[0]
+        except:
+            vim.command("norm u")
+            vim.command("norm vip")
+            beg = vim.current.buffer.mark('<')[0]
+            end = vim.current.buffer.mark('>')[0]
+    justified = mail_format.Text(vim.current.buffer.range(beg-1, end)).justify(72, indent_first=4).encode(encoding)
     vim.command("norm d")
     vim.current.buffer[beg-1:end] = justified.encode(encoding).split("\n")
+    vim.command("call winrestview(winview)")
 EOS
 command! -range -nargs=* Justify :python _justify(<line1>, <line2>, <f-args>)
 command! -range -nargs=* OEQuoteFix :python _oe_quotefix(<line1>, <line2>, <f-args>)
 command! -range -nargs=* CleanQuotes :python _clean_quotes(<line1>, <line2>, <f-args>)
 command! -range -nargs=* IncQuoteLevel :python _inc_quote_level(<line1>, <line2>, <f-args>)
 command! -range -nargs=* DecQuoteLevel :python _dec_quote_level(<line1>, <line2>, <f-args>)
+command! -range -nargs=* TakeOut :python _take_out(<line1>, <line2>, <f-args>)
 
-" Function: TakeOut() {{{
-" Purpose:  Takes out a paragraph (quoted or not)
-"           
-" Features: * Ask a question and put the taking out reason in brakets
-"           * finds out paragraphs in quoted context
-"           * support up to 30 level of quotation
-" TODO:     * change the QuoteLevel() algorithm, which is not
-"             optimum...
-"           * make the selection visible to the user when selecting
-"             in a quote or selecting the first sentence of the paragraph
-" Author:   Bernard PRATZ <bernard@pratz.net>
-function! TakeOut()
-    function! s:BegQuotedParagraph()
-    " Function to find the beginning of a quoted parapraph
-        let curpos = line('.')
-        let i = line('.')
-        while i > 2
-            if s:QuoteLevel(i-1) != s:QuoteLevel(i) || getline(i - 1) =~ '^\('.g:QuoteRegexp.'\)*\s*$'
-                sil call cursor(curpos,0)
-                return i
-            endif
-            let i = i - 1
-        endwhile
-    endfunction
-    function! s:EndQuotedParagraph()
-    " Function to find the end of a quoted paragraph
-        let curpos = line('.')
-        let i = line('.')
-        while i < line('$')
-            if s:QuoteLevel(i+1) != s:QuoteLevel(i) || getline(i + 1) =~ '^\('.g:QuoteRegexp.'\)*\s*$'
-                sil call cursor(curpos,0)
-                return i
-            endif
-            let i = i + 1
-        endwhile
-    endfunction
-    " Function to remove a paragraph
-    if getline('.') =~ '^\('.g:QuoteRegexp.'\)*\s*$'
-        return -1
-    elseif s:QuoteLevel(line('.')) == 0
-        exe 'norm vip'
-    else
-        exe 'norm '.s:BegQuotedParagraph().'GV'.s:EndQuotedParagraph().'G'
-    endif
-    redraw
-    let snippedtext = s:Input("Reason","snip")
-    exe 'norm dO['.snippedtext.']'
-endfunction "}}}
 " Function: HighLightenment() {{{
 " Purpose:  Sets up the mail highlights features
 "           
@@ -152,15 +145,21 @@ function! HighLightenment()
 endfunction " }}}
 function! s:DoMappings() " {{{
     " It does just make the mappings
-    exe "nmap ".s:takeout."  :call TakeOut()<CR>"
-    exe "nmap ".s:reformat." :Justify()<CR>"
-    exe "nmap ".s:oequotef." :OEQuoteFix()<CR>"
-    exe 'nmap '.s:cleanrep.' :CleanQuotes()<CR>'
-    exe 'nmap '.s:cleanreu.' :IncQuoteLevel()<CR>'
-    exe 'nmap '.s:cleanred.' :DecQuoteLevel()<CR>'
-    exe 'nmap '.s:highligh.' :call HighLightenment()<CR>'
-    exe 'nmap '.s:cuthere.'  O'.s:CutHereBeg.'<CR>'.s:CutHereEnd.'<ESC>^O'
-    exe 'vmap '.s:cuthere.'  :s/\(\_.*\)/'.s:CutHereBeg.'\1'.s:CutHereEnd.'<CR>'
+    exe "nnoremap ".g:yaposting#takeout."  :TakeOut()<CR>"
+    exe "vnoremap ".g:yaposting#takeout."  :TakeOut()<CR>"
+    exe "nnoremap ".g:yaposting#reformat." :Justify()<CR>"
+    exe "vnoremap ".g:yaposting#reformat." :Justify()<CR>"
+    exe "nnoremap ".g:yaposting#oequotef." :OEQuoteFix()<CR>"
+    exe "vnoremap ".g:yaposting#oequotef." :OEQuoteFix()<CR>"
+    exe 'nnoremap '.g:yaposting#cleanrep.' :CleanQuotes()<CR>'
+    exe 'vnoremap '.g:yaposting#cleanrep.' :CleanQuotes()<CR>'
+    exe 'nnoremap '.g:yaposting#cleanreu.' :IncQuoteLevel()<CR>'
+    exe 'vnoremap '.g:yaposting#cleanreu.' :IncQuoteLevel()<CR>'
+    exe 'nnoremap '.g:yaposting#cleanred.' :DecQuoteLevel()<CR>'
+    exe 'vnoremap '.g:yaposting#cleanred.' :DecQuoteLevel()<CR>'
+    exe 'nnoremap '.g:yaposting#highligh.' :call HighLightenment()<CR>'
+    exe 'nnoremap '.g:yaposting#cuthere.'  O'.g:yaposting#CutHereBeg.'<CR>'.g:yaposting#CutHereEnd.'<ESC>^O'
+    exe 'vnoremap '.g:yaposting#cuthere.'  dO'.g:yaposting#CutHereBeg.'<CR>'.g:yaposting#CutHereEnd.'<ESC>P'
 endfunction " }}}
 
 sil call s:DoMappings()

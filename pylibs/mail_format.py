@@ -123,7 +123,7 @@ class Quote():
         self.citation = re.compile(citation, re.MULTILINE)
 
         # matches on "> text"
-        quote_re = r"^(%(q)s)([ %(q)s]*) (.*)"
+        quote_re = r"^(%(q)s)([ %(q)s]*) ?(.*)"
         self.quote_re = re.compile(quote_re % {"q": u"|".join(quote)},
                                    re.MULTILINE)
 
@@ -131,6 +131,39 @@ class Quote():
         m = self.citation.search(paragraph)
         if m:
             return m.span()
+
+    def find_boundaries(self, paragraph):
+        if isinstance(paragraph, str):
+            paragraph = paragraph.splitlines()
+        i=1
+        quote=[]
+        for line in paragraph:
+            if self.quote_re.match(line):
+                quote.append(i)
+            i += 1
+        return (quote[0], quote[-1])
+
+    def find_current_level_boundaries(self, paragraph, curline=1):
+        level = {}
+        curlevel = 0
+        if isinstance(paragraph, str):
+            paragraph = paragraph.splitlines()
+        i=0
+        for line in paragraph:
+            m = self.quote_re.match(line)
+            if m:
+                n = m.group(1).count(">") + m.group(2).count(">")
+            else:
+                n = 0
+            i += 1
+            level.setdefault(n, []).append(i)
+            if i == curline:
+                curlevel = n
+
+        quote = "%s%s" % (self.quote,
+                          " "+(self.quote * (curlevel - 2))+" " if curlevel != 1 else "")
+
+        return (level[curlevel][0], level[curlevel][-1], quote)
 
     def has_reply_quote(self, paragraph):
         if self.quote_re.search(paragraph):
@@ -172,16 +205,16 @@ class Quote():
         for i in sorted(level.keys(), reverse=True):
             lines = [self.quote_re.sub(lambda m: m.group(3), line)
                      for line in level[i]]
-            lines = u"\n".join(lines)
+            lines = u" ".join(lines)
 
             prefix = kwargs.get("prefix", "")
-            quotes = (u">" * (i - 1)) if i > 0 else None
-            prefix = u"%s%s %s " % (prefix, self.quote, quotes)
+            quotes = " "+(self.quote * (i - 1))+" " if i != 1 else " "
+            prefix = u"%s%s%s" % (prefix, self.quote, quotes)
 
             paragraph = Text(lines).justify(linewidth, prefix=prefix, **kwargs)
 
-            out += u"\n\n" if i is 0 else "\n"
             out += paragraph
+            out += "\n"
         return out
 
 
