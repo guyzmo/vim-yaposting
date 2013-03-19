@@ -17,6 +17,7 @@ Features
 * *TakeOut*: it is used to remove a quoted paragraph. Either you remove the quoted paragraph the cursor is on, or you remove the visual selection.
 * *Reformat*: it is used to reformat current paragraph (or selection) to justified text with configurable values of alinea, indent and width
 * *CleanReply*: it is used to reformat the whole quoted text (or selection) to be justified and correctly ordered (fixes top replies)
+* *OE Quote fix*: it is used to reformat a ill-formatted mail (like from outlook or gmail). Still experimental.
 * *Increase Quote level*: increases quote level of current line or selection
 * *Decrease Quote level*: decreases quote level of current line or selection
 * *Highlight*: hilights all text that is wider than defined settings
