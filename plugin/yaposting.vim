@@ -1,3 +1,7 @@
+" yaposting v2 vim script
+" (c)2013, Bernard `Guyzmo` Pratz
+" Licensed under the WTFPL, http://wtfpl.net
+" 
 
 if exists("g:yaposting")
     finish
@@ -46,10 +50,21 @@ import mail_format
 
 def _oe_quotefix(beg, end, *arg):
     encoding = vim.eval("&encoding")
-    m = mail_format.Mail("\n".join(vim.current.buffer[beg-1:end])).oe_quotefix(strip_signature=True, 
-                                                                    reformat=True,
-                                                                    linewidth=72)
-    return m.__str__().encode(encoding).split("\n")
+    quote = vim.eval("g:yaposting#QuoteExpr")
+    vim.command("let winview = winsaveview()")
+    if beg == end:
+        beg, end = mail_format.Quote(quote=quote).find_boundaries(vim.current.buffer[:])
+    else:
+        qbeg, qend = mail_format.Quote(quote=quote).find_boundaries(vim.current.buffer[beg-1:end])
+        beg = qbeg+beg-1
+        end = qbeg+end-1
+    m = mail_format.Mail(mail_format.Quote(quote=quote), "\n".join(vim.current.buffer[beg-1:end]))
+    m.oe_quotefix(strip_signature=True, 
+                            reformat=True,
+                            linewidth=72)
+    vim.current.buffer[beg-1:end] = m.__str__().encode(encoding).splitlines()
+    vim.command("call winrestview(winview)")
+    
 
 def _take_out(beg, end, *arg):
     encoding = vim.eval("&encoding")
@@ -162,7 +177,7 @@ function! s:DoMappings() " {{{
     exe 'vnoremap '.g:yaposting#cuthere.'  dO'.g:yaposting#CutHereBeg.'<CR>'.g:yaposting#CutHereEnd.'<ESC>P'
 endfunction " }}}
 
-sil call s:DoMappings()
+au FileType mail sil call s:DoMappings()
 
 
 

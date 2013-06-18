@@ -15,15 +15,15 @@ from itertools import groupby
 
 
 class Mail():
-    def __init__(self, mail):
+    def __init__(self, quote, mail):
         self.mail = mail
-        self.quote = Quote()
+        self.quote = quote
         # matches on "------ Your message ------" from outlook
         self.oe_quote = re.compile(u"---*[\w ]+---*.*$", re.MULTILINE)
         # matches on header-type "key: value"
         self.header = re.compile(u"^(?P<key>[ \w-]+): *(?P<value>[\w:. ><@,+-]+)$", re.MULTILINE | re.UNICODE)
         # matches signature
-        self.sign = re.compile(r"^--", re.MULTILINE)
+        self.sign = re.compile(r"^ *-- *\n", re.MULTILINE)
         self.headers = []
 
     def take_away_headers(self):
@@ -55,17 +55,18 @@ class Mail():
             return quote
 
     def oe_quotefix(self, strip_signature=False, reformat=False, linewidth=85, **kwargs):
-        from_h = re.compile(r"(de|from|von)", re.UNICODE | re.IGNORECASE)
-        date_h = re.compile(r"date", re.UNICODE | re.IGNORECASE)
+        from_h = re.compile(r" *(de|from|von)", re.UNICODE | re.IGNORECASE)
+        date_h = re.compile(r" *date", re.UNICODE | re.IGNORECASE)
 
         m = self.oe_quote.search(self.mail)
-        if not m:
+        if m:
             beg_idx, end_idx = m.span()
+        else:
+            return
         headers = dict()
 
         # strip quotes from reply, and record if there is a quote level
         quoted = self.quote.decrease_quote_level(self.mail[end_idx:])
-        has_quote = (quoted == self.mail[end_idx:])
 
         if strip_signature:
             quoted = self.remove_signature(quoted)
@@ -87,32 +88,30 @@ class Mail():
                 break
         if d:
             if f:
-                out = u"On %s, %s wrote:\n" % (d, f)
+                out = u"%s On %s, %s wrote:\n" % (self.quote.quote, d, f)
             else:
-                out = u"On %s, you wrote:\n" % d
+                out = u"%s On %s, you wrote:\n" % (self.quote.quote, d)
         else:
             if f:
-                out = u" * %s wrote:\n" % f
+                out = u"%s * %s wrote:\n" % (self.quote.quote, f)
             else:
-                out = u" * You wrote:\n"
+                out = u"%s * You wrote:\n" % self.quote.quote
 
         if reformat:
-            if has_quote:
-                out += Text(quoted[last:]).justify(linewidth, **kwargs).decode('utf8')
-            else:
-                kwargs["prefix"] = "> "
-                out += Text(quoted[last:]).justify(linewidth, **kwargs).decode('utf8')
+            kwargs["prefix"] = "%s %s " % (self.quote.quote, self.quote.quote)
+            out += Text(quoted[last:]).justify(linewidth, **kwargs).decode('utf8')
         else:
             out += self.quote.increase_quote_level(quoted[last:], whole=True)
 
-        out += self.mail[:beg_idx]
+        out += "\n"+self.mail[:beg_idx]
+
         self.mail = out
 
     def __repr__(self):
         return u"<Mail(%s)>" % repr(self.mail[:20])
 
     def __str__(self):
-        return self.mail.encode('utf8')
+        return self.mail
 
 
 class Quote():
