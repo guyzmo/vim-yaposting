@@ -236,7 +236,7 @@ class Text():
             separator = u"\n%s\n" % prefix
         for group_separator, line_iteration in groupby(self.text, key=lambda x: x.isspace()):
             if not group_separator:
-                paragraph = ''.join(line_iteration)
+                paragraph = ' '.join(line_iteration)[1:]
                 if len(paragraph) == 0:
                     continue
                 out.append(Paragraph(paragraph).justify(line_width, indent_first,
