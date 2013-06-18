@@ -111,7 +111,7 @@ def _justify(beg, end, *arg):
             end = vim.current.buffer.mark('>')[0]
     justified = mail_format.Text(vim.current.buffer.range(beg-1, end)).justify(72, indent_first=4).encode(encoding)
     vim.command("norm d")
-    vim.current.buffer[beg-1:end] = justified.encode(encoding).split("\n")
+    vim.current.buffer[beg-1:beg] = justified.encode(encoding).split("\n") + ["\n"]
     vim.command("call winrestview(winview)")
 EOS
 command! -range -nargs=* Justify :python _justify(<line1>, <line2>, <f-args>)
